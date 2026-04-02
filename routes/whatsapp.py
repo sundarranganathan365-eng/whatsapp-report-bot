@@ -98,28 +98,35 @@ async def whatsapp_webhook(
         )
         return Response(content=str(twiml), media_type="application/xml")
 
-    # ── Send text summary first ───────────────────────────────────────────────
-    # We now use the 'weekly_snapshot' (last 7 days) as the text reply
-    # while keeping the full data in the PDF report.
-    twiml.message(result["weekly_snapshot"])
+    # ── Immediate acknowledgment ──────────────────────────────────────────────
+    # We return a quick TwiML response so Twilio doesn't time out while we generate the PDF.
+    # The actual report content will be sent via the REST API below.
+    twiml.message("⏳ *Generating your report...* Please wait a moment.")
 
-    # ── Send PDF via Twilio REST API (TwiML can't attach files directly) ─────
-    pdf_filename = os.path.basename(result["pdf_path"])
-    pdf_url = f"{PUBLIC_BASE_URL}/api/pdf/{pdf_filename}"
-
+    # ── Send report via Twilio REST API ───────────────────────────────────────
     try:
         client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        
+        # 1. Send the text snapshot (Last 7 Days)
+        client.messages.create(
+            from_=TWILIO_FROM,
+            to=From,
+            body=result["weekly_snapshot"]
+        )
+
+        # 2. Add a tiny delay if needed or just send the PDF immediately
+        pdf_filename = os.path.basename(result["pdf_path"])
+        pdf_url = f"{PUBLIC_BASE_URL}/api/pdf/{pdf_filename}"
+        
+        # 3. Send the PDF attachment
         client.messages.create(
             from_=TWILIO_FROM,
             to=From,
             media_url=[pdf_url],
-            body="📎 Your PDF report is attached above.",
+            body="📎 Your full PDF report is attached above.",
         )
     except Exception as e:
-        # Don't fail —text summary already sent
-        msg = twiml.message(
-            f"⚠️ Report generated but PDF could not be sent.\n"
-            f"Reason: {e}"
-        )
+        # If REST API fails, we can't do much but log it
+        print(f"ERROR sending WhatsApp report: {e}")
 
     return Response(content=str(twiml), media_type="application/xml")
