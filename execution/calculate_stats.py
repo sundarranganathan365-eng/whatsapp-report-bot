@@ -153,37 +153,48 @@ def build_full_stats(raw_data: dict) -> dict:
 
 def _get_weekly_snapshot(raw_data: dict, days: int = 7) -> str:
     """
-    Returns a short text string summarizing only the last 7 days.
+    Returns a short text string summarizing recent activity.
+    - Attendance: strictly last 7 days.
+    - Tests/Exams: most recent 5 records.
     """
     from datetime import datetime, timedelta
 
     cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
 
-    # Weekly Attendance
+    # 1. Weekly Attendance (strictly last 7 days)
     week_att = [r for r in raw_data["attendance"] if r["date"] >= cutoff]
     present = sum(1 for r in week_att if r["status"].strip().lower() in ["present", "p"])
     total = len(week_att)
-    att_str = f"{present}/{total} days" if total > 0 else "No records"
+    att_str = f"{present}/{total} days" if total > 0 else "No records this week"
 
-    # Weekly Tests/Exams
-    week_tests = [r for r in raw_data["tests"] if r["date"] >= cutoff]
-    week_exams = [r for r in raw_data["exams"] if r["date"] >= cutoff]
+    # 2. Most Recent 5 Tests (list individually)
+    sorted_tests = sorted(raw_data["tests"], key=lambda r: r["date"], reverse=True)
+    recent_tests = sorted_tests[:5]
+    
+    test_lines = []
+    if recent_tests:
+        test_lines.append("\n📝 *Recent Tests:*")
+        for r in recent_tests:
+            test_lines.append(f"   • {r['subject']}: {r['marks']}")
+    test_msg = "\n".join(test_lines)
 
-    test_msg = ""
-    if week_tests:
-        avg = sum(r["marks"] for r in week_tests) / len(week_tests)
-        test_msg = f"\n📝 *Tests:* Avg {avg:.1f} ({len(week_tests)} tests)"
-
-    exam_msg = ""
-    if week_exams:
-        avg = sum(r["marks"] for r in week_exams) / len(week_exams)
-        exam_msg = f"\n🎓 *Exams:* Avg {avg:.1f} ({len(week_exams)} exams)"
+    # 3. Most Recent Exams (list individually)
+    sorted_exams = sorted(raw_data["exams"], key=lambda r: r["date"], reverse=True)
+    recent_exams = sorted_exams[:2]
+    
+    exam_lines = []
+    if recent_exams:
+        exam_lines.append("\n🎓 *Recent Exams:*")
+        for r in recent_exams:
+            exam_lines.append(f"   • {r['subject']}: {r['marks']}")
+    exam_msg = "\n".join(exam_lines)
 
     snapshot = (
-        f"📅 *Last 7 Days*\n"
-        f"• Attendance: {att_str}"
+        f"🕒 *Current Snapshot*\n"
+        f"• Attendance (7d): {att_str}"
         f"{test_msg}"
-        f"{exam_msg}"
+        f"{exam_msg}\n\n"
+        f"*(Full 6-month report in PDF below)*"
     )
     return snapshot
 
