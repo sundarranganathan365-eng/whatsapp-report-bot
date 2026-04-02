@@ -154,18 +154,37 @@ def build_full_stats(raw_data: dict) -> dict:
 def _get_weekly_snapshot(raw_data: dict, days: int = 7) -> str:
     """
     Returns a short text string summarizing recent activity.
-    - Attendance: strictly last 7 days.
+    - Attendance: strictly last 7 days with a daily breakdown.
     - Tests/Exams: most recent 5 records.
     """
     from datetime import datetime, timedelta
 
-    cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    # Use today's date (or latest date in data if testing with old data, but usually today is fine)
+    # For robust testing with provided sample data, we might want to use the max date in attendance
+    # if it's more than 7 days ago. But for production, datetime.now() is correct.
+    today = datetime.now()
+    cutoff_date = today - timedelta(days=days)
+    cutoff = cutoff_date.strftime("%Y-%m-%d")
 
     # 1. Weekly Attendance (strictly last 7 days)
     week_att = [r for r in raw_data["attendance"] if r["date"] >= cutoff]
-    present = sum(1 for r in week_att if r["status"].strip().lower() in ["present", "p"])
-    total = len(week_att)
-    att_str = f"{present}/{total} days" if total > 0 else "No records this week"
+    week_att = sorted(week_att, key=lambda x: x["date"])
+    
+    attendance_lines = []
+    for r in week_att:
+        try:
+            dt = datetime.strptime(r["date"], "%Y-%m-%d")
+            date_str = dt.strftime("%d/%m")
+        except:
+            date_str = r["date"]
+        
+        status = "P" if r["status"].strip().lower() in ["present", "p"] else "A"
+        attendance_lines.append(f"   • {date_str}: *{status}*")
+    
+    if not attendance_lines:
+        att_msg = "   No records found for the last 7 days."
+    else:
+        att_msg = "\n".join(attendance_lines)
 
     # 2. Most Recent 5 Tests (list individually)
     sorted_tests = sorted(raw_data["tests"], key=lambda r: r["date"], reverse=True)
@@ -189,9 +208,11 @@ def _get_weekly_snapshot(raw_data: dict, days: int = 7) -> str:
             exam_lines.append(f"   • {r['subject']}: {r['marks']}")
     exam_msg = "\n".join(exam_lines)
 
+    student = raw_data["student"]
     snapshot = (
-        f"🕒 *Current Snapshot*\n"
-        f"• Attendance (7d): {att_str}"
+        f"📋 *Report: {student['name']}* ({student['roll_no']})\n\n"
+        f"📅 *Last 7 Days Attendance:*\n"
+        f"{att_msg}\n"
         f"{test_msg}"
         f"{exam_msg}\n\n"
         f"*(Full 6-month report in PDF below)*"
@@ -202,25 +223,28 @@ def _get_weekly_snapshot(raw_data: dict, days: int = 7) -> str:
 # ── quick test (no Google Sheets needed) ────────────────────────────────────
 if __name__ == "__main__":
     import json
+    from datetime import datetime, timedelta
+
+    def days_ago(n):
+        return (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
 
     sample = {
         "student": {"roll_no": "23", "name": "Rahul", "class": "10A"},
         "attendance": [
-            {"date": "2024-01-01", "status": "Present"},
-            {"date": "2024-01-02", "status": "Absent"},
-            {"date": "2024-01-03", "status": "Present"},
-            {"date": "2024-01-04", "status": "Present"},
+            {"date": days_ago(0), "status": "Present"},
+            {"date": days_ago(1), "status": "Present"},
+            {"date": days_ago(2), "status": "Absent"},
+            {"date": days_ago(3), "status": "Present"},
+            {"date": days_ago(8), "status": "Present"}, # older than 7 days
         ],
         "tests": [
-            {"date": "2024-01-10", "subject": "Maths", "marks": 82},
-            {"date": "2024-01-11", "subject": "Science", "marks": 76},
-            {"date": "2024-02-10", "subject": "Maths", "marks": 90},
+            {"date": days_ago(5), "subject": "Maths", "marks": 82},
+            {"date": days_ago(12), "subject": "Science", "marks": 76},
         ],
         "exams": [
-            {"date": "2024-03-01", "subject": "Maths", "marks": 88},
-            {"date": "2024-03-02", "subject": "Science", "marks": 74},
+            {"date": days_ago(30), "subject": "Term 1", "marks": 88},
         ],
     }
 
     stats = build_full_stats(sample)
-    print(json.dumps(stats, indent=2))
+    print(stats["weekly_snapshot"])

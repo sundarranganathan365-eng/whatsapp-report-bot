@@ -7,11 +7,15 @@ Run with:
   uvicorn main:app --reload --port 8000
 """
 
-import os
+import os, logging
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from routes.report import router as report_router
 from routes.whatsapp import router as whatsapp_router
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Ensure output dirs exist
 os.makedirs(".tmp/reports", exist_ok=True)
