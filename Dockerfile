@@ -1,14 +1,24 @@
-FROM python:3.11-slim
+# Stage 1: Build React Frontend
+FROM node:20-slim AS frontend-build
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm install
+COPY frontend/ .
+RUN npm run build
 
-# Set working directory
+# Stage 2: Build Python Backend
+FROM python:3.11-slim
 WORKDIR /app
 
-# Install dependencies
+# Copy python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy project files
+# Copy all project files
 COPY . .
+
+# Copy built frontend from Stage 1
+COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
 # Ensure tmp directories exist
 RUN mkdir -p .tmp/reports .tmp/charts

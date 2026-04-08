@@ -10,8 +10,14 @@ Run with:
 import os, logging
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from routes.report import router as report_router
 from routes.whatsapp import router as whatsapp_router
+from routes.admin_students import router as admin_students_router
+from routes.admin_attendance import router as admin_attendance_router
+from routes.admin_marks import router as admin_marks_router
+from routes.admin_reports import router as admin_reports_router
+from routes.admin_bot import router as admin_bot_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -27,21 +33,42 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# Enable CORS for the React frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Adjust this in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Serve generated PDFs publicly so Twilio can fetch them
 app.mount("/api/pdf", StaticFiles(directory=".tmp/reports"), name="pdf")
 
 # Routes
 app.include_router(report_router, prefix="/api")
 app.include_router(whatsapp_router, prefix="/api")
+app.include_router(admin_students_router, prefix="/api")
+app.include_router(admin_attendance_router, prefix="/api")
+app.include_router(admin_marks_router, prefix="/api")
+app.include_router(admin_reports_router, prefix="/api")
+app.include_router(admin_bot_router, prefix="/api")
 
 
-@app.get("/")
-def root():
-    return {
-        "status": "running",
-        "endpoints": {
-            "POST /api/get-report":  "Returns PDF for a roll number",
-            "POST /api/get-summary": "Returns JSON text summary",
-            "POST /api/whatsapp":    "Twilio WhatsApp webhook",
-        },
-    }
+# Serve React Frontend
+if os.path.exists("frontend/dist"):
+    app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
+else:
+    @app.get("/")
+    def root():
+        return {"status": "running", "message": "API is active. Frontend build not found."}
+
+# SPA Catch-all (for React Router)
+@app.exception_handler(404)
+async def custom_404_handler(request, __):
+    if not request.url.path.startswith("/api"):
+        from fastapi.responses import FileResponse
+        dist_path = os.path.join("frontend", "dist", "index.html")
+        if os.path.exists(dist_path):
+            return FileResponse(dist_path)
+    return {"detail": "Not Found"}

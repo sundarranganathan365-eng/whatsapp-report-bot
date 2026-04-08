@@ -8,44 +8,15 @@ Required env vars:
   GOOGLE_CREDENTIALS_PATH   — Path to the service account credentials.json
 """
 
+import sys
 import os
-import gspread
-from google.oauth2.service_account import Credentials
+
+# Ensure the parent directory is in the system path to allow importing from 'services'
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from services.sheets_service import sheets_service
 from dotenv import load_dotenv
 
 load_dotenv()
-
-SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets.readonly",
-    "https://www.googleapis.com/auth/drive.readonly",
-]
-
-
-def get_sheet_client():
-    """Authenticate and return a gspread client."""
-    import json
-    
-    # Priority 1: Check for raw JSON string in env (Best for Cloud/Render)
-    creds_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
-    if creds_json:
-        try:
-            info = json.loads(creds_json)
-            creds = Credentials.from_service_account_info(info, scopes=SCOPES)
-            return gspread.authorize(creds)
-        except Exception as e:
-            print(f"⚠️ Error parsing GOOGLE_CREDENTIALS_JSON: {e}")
-
-    # Priority 2: Check for file path (Best for local dev)
-    creds_path = os.getenv("GOOGLE_CREDENTIALS_PATH", "credentials.json")
-    if os.path.exists(creds_path):
-        creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
-        return gspread.authorize(creds)
-    
-    raise FileNotFoundError(
-        "No Google credentials found! Set GOOGLE_CREDENTIALS_JSON in env "
-        "or provide a credentials.json file."
-    )
-
 
 def fetch_student_data(roll_no: str, class_name: str, student_name: str = None) -> dict:
     """
@@ -64,18 +35,8 @@ def fetch_student_data(roll_no: str, class_name: str, student_name: str = None) 
     if student_name:
         student_name = str(student_name).strip().lower()
 
-    sheet_id = os.getenv("GOOGLE_SHEETS_KEY")
-    if not sheet_id:
-        raise EnvironmentError(
-            "GOOGLE_SHEETS_KEY is not set. Add it to your .env file."
-        )
-
-    client = get_sheet_client()
-    spreadsheet = client.open_by_key(sheet_id)
-
     # ── students sheet ──────────────────────────────────────────────────────
-    students_ws = spreadsheet.worksheet("students")
-    students_data = students_ws.get_all_records()
+    students_data = sheets_service.get_all_records("students")
 
     student_row = None
     for row in students_data:
@@ -109,16 +70,14 @@ def fetch_student_data(roll_no: str, class_name: str, student_name: str = None) 
         return True
 
     # ── attendance sheet ────────────────────────────────────────────────────
-    attendance_ws = spreadsheet.worksheet("attendance")
-    attendance_data = attendance_ws.get_all_records()
+    attendance_data = sheets_service.get_all_records("attendance")
     attendance = [
         {"date": str(row["Date"]), "status": str(row["Status"]).strip()}
         for row in attendance_data if match_row(row)
     ]
 
     # ── tests sheet ─────────────────────────────────────────────────────────
-    tests_ws = spreadsheet.worksheet("tests")
-    tests_data = tests_ws.get_all_records()
+    tests_data = sheets_service.get_all_records("tests")
     tests = [
         {
             "date": str(row["Date"]),
@@ -129,8 +88,7 @@ def fetch_student_data(roll_no: str, class_name: str, student_name: str = None) 
     ]
 
     # ── exams sheet ─────────────────────────────────────────────────────────
-    exams_ws = spreadsheet.worksheet("exams")
-    exams_data = exams_ws.get_all_records()
+    exams_data = sheets_service.get_all_records("exams")
     exams = [
         {
             "date": str(row["Date"]),

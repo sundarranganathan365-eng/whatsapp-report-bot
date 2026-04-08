@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 
 from utils.input_parser import parse_student_input, is_complete
 from services.report_service import build_report
+from services.config_service import config_service
 
 load_dotenv()
 
@@ -54,10 +55,15 @@ async def whatsapp_webhook(
     """
     incoming = Body.strip()
     twiml = MessagingResponse()
+    
+    config = config_service.get_config()
+    if not config.get("is_active", True):
+        twiml.message("😴 The bot is currently paused by the administrator. Please try again later.")
+        return Response(content=str(twiml), media_type="application/xml")
 
     # ── Greeting ─────────────────────────────────────────────────────────────
     if incoming.lower() in GREETINGS or not incoming:
-        twiml.message(USAGE_MESSAGE)
+        twiml.message(config.get("default_reply", USAGE_MESSAGE))
         return Response(content=str(twiml), media_type="application/xml")
 
     # ── Parse input ──────────────────────────────────────────────────────────
