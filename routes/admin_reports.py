@@ -10,12 +10,15 @@ from services.report_service import build_report
 router = APIRouter(prefix="/admin/reports", tags=["Admin - Reports"])
 
 @router.get("/preview/{roll_no}", summary="Preview report logic (admin)")
-def preview_report(roll_no: str):
+def preview_report(roll_no: str, class_name: str = None):
     try:
         # Step 1: Find the student to get class_name and name
         students = student_service.get_all_students(search_query=roll_no)
         # We need an exact match for roll_no since search_query does a substring search
-        student = next((s for s in students if s["roll_no"] == roll_no), None)
+        if class_name:
+            student = next((s for s in students if s["roll_no"] == roll_no and s["class_name"].upper() == class_name.upper()), None)
+        else:
+            student = next((s for s in students if s["roll_no"] == roll_no), None)
         
         if not student:
             raise HTTPException(status_code=404, detail=f"Student with Roll No {roll_no} not found.")

@@ -66,8 +66,12 @@ export const api = {
     return data.data;
   },
 
-  previewReport: async (rollNo) => {
-    const res = await fetch(`${API_BASE}/reports/preview/${encodeURIComponent(rollNo)}`);
+  previewReport: async (rollNo, className) => {
+    let url = `${API_BASE}/reports/preview/${encodeURIComponent(rollNo)}`;
+    if (className) {
+      url += `?class_name=${encodeURIComponent(className)}`;
+    }
+    const res = await fetch(url);
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Failed to fetch");
     return data.data;

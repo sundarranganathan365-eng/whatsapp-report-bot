@@ -4,6 +4,7 @@ import { Search, Download, FileText } from 'lucide-react';
 
 const ReportPreview = () => {
     const [rollNo, setRollNo] = useState('');
+    const [className, setClassName] = useState('');
     const [report, setReport] = useState(null);
     const [loading, setLoading] = useState(false);
   
@@ -12,7 +13,7 @@ const ReportPreview = () => {
       if (!rollNo) return;
       setLoading(true);
       try {
-        const data = await api.previewReport(rollNo);
+        const data = await api.previewReport(rollNo, className);
         setReport(data);
       } catch (err) {
         alert("Error: " + err.message);
@@ -29,12 +30,16 @@ const ReportPreview = () => {
         </div>
   
         <div className="card" style={{ marginBottom: '24px' }}>
-          <form onSubmit={handleGenerate} style={{ display: 'flex', gap: '16px', alignItems: 'flex-end' }}>
-            <div className="input-group" style={{ margin: 0, flex: 1, maxWidth: '400px' }}>
+          <form onSubmit={handleGenerate} style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div className="input-group" style={{ margin: 0, flex: 1, minWidth: '150px', maxWidth: '300px' }}>
               <label>Student Roll No</label>
-              <input value={rollNo} onChange={e => setRollNo(e.target.value)} placeholder="Enter Roll No" />
+              <input value={rollNo} onChange={e => setRollNo(e.target.value)} placeholder="Enter Roll No" required />
             </div>
-            <button type="submit" className="btn-primary" style={{ height: '46px' }} disabled={loading}>
+            <div className="input-group" style={{ margin: 0, flex: 1, minWidth: '150px', maxWidth: '300px' }}>
+              <label>Class</label>
+              <input value={className} onChange={e => setClassName(e.target.value)} placeholder="e.g. 10A (Optional)" />
+            </div>
+            <button type="submit" className="btn-primary" style={{ height: '46px', whiteSpace: 'nowrap' }} disabled={loading}>
                 {loading ? 'Generating...' : <><FileText size={18}/> Generate Preview</>}
             </button>
           </form>
