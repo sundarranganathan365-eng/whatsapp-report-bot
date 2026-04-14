@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { api } from '../api/client';
+import { api, PDF_BASE } from '../api/client';
 import { Search, Download, FileText } from 'lucide-react';
 
 const ReportPreview = () => {
