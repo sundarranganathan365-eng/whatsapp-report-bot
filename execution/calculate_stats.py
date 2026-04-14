@@ -163,11 +163,10 @@ def _get_weekly_snapshot(raw_data: dict, days: int = 7) -> str:
     # For robust testing with provided sample data, we might want to use the max date in attendance
     # if it's more than 7 days ago. But for production, datetime.now() is correct.
     today = datetime.now()
-    cutoff_date = today - timedelta(days=days)
-    cutoff = cutoff_date.strftime("%Y-%m-%d")
 
-    # 1. Weekly Attendance (strictly last 7 days)
-    week_att = [r for r in raw_data["attendance"] if r["date"] >= cutoff]
+    # 1. Weekly Attendance (last 7 recorded days)
+    sorted_att = sorted(raw_data["attendance"], key=lambda r: r["date"], reverse=True)
+    week_att = sorted_att[:days]
     week_att = sorted(week_att, key=lambda x: x["date"])
     
     attendance_lines = []
@@ -182,7 +181,7 @@ def _get_weekly_snapshot(raw_data: dict, days: int = 7) -> str:
         attendance_lines.append(f"   • {date_str}: *{status}*")
     
     if not attendance_lines:
-        att_msg = "   No records found for the last 7 days."
+        att_msg = f"   No records found for the last {days} days."
     else:
         att_msg = "\n".join(attendance_lines)
 

@@ -81,6 +81,8 @@ def run_full_report(roll_no: str, class_name: str, student_name: str = None) -> 
     print(f"   PDF: {pdf_path}")
     print("\n--- Summary ---")
     print(summary)
+    print("\n--- WhatsApp Message (Weekly Snapshot) ---")
+    print(stats["weekly_snapshot"])
 
     return {
         "student_name": student["name"],
