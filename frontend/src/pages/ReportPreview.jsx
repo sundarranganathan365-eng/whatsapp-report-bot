@@ -83,13 +83,13 @@ const ReportPreview = () => {
             <div className="card" style={{ flex: 2, display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <h3 className="display-text">PDF Attachment</h3>
-                    <a href={`http://localhost:8000${report.pdf_url}`} target="_blank" rel="noreferrer" className="btn-primary" style={{ textDecoration: 'none', padding: '6px 12px', fontSize: '0.875rem' }}>
+                    <a href={`${PDF_BASE}${report.pdf_url}`} target="_blank" rel="noreferrer" className="btn-primary" style={{ textDecoration: 'none', padding: '6px 12px', fontSize: '0.875rem' }}>
                         <Download size={16} /> Download
                     </a>
                 </div>
                 <div style={{ flex: 1, background: 'var(--surface-container-low)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
                     <iframe 
-                        src={`http://localhost:8000${report.pdf_url}`} 
+                        src={`${PDF_BASE}${report.pdf_url}`} 
                         width="100%" 
                         height="100%" 
                         style={{ border: 'none' }}

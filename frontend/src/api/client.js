@@ -1,4 +1,5 @@
 const API_BASE = window.location.hostname === 'localhost' ? "http://localhost:8000/api/admin" : "/api/admin";
+export const PDF_BASE = window.location.hostname === 'localhost' ? "http://localhost:8000" : "";
 
 export const api = {
   getStudents: async (search = "") => {
