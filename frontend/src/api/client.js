@@ -67,10 +67,10 @@ export const api = {
     return data.data;
   },
 
-  previewReport: async (rollNo, className) => {
-    let url = `${API_BASE}/reports/preview/${encodeURIComponent(rollNo)}`;
+  previewReport: async (rollNo, className, reportType = "weekly") => {
+    let url = `${API_BASE}/reports/preview/${encodeURIComponent(rollNo)}?report_type=${encodeURIComponent(reportType)}`;
     if (className) {
-      url += `?class_name=${encodeURIComponent(className)}`;
+      url += `&class_name=${encodeURIComponent(className)}`;
     }
     const res = await fetch(url);
     const data = await res.json();
