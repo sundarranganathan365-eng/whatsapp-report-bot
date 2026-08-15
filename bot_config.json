@@ -1,4 +1,4 @@
 {
     "is_active": true,
-    "default_reply": "👋 *Welcome to the Student Report Bot!*\n\nPlease send student details in this format:\n  `Name: Rahul, Class: 10A, Roll: 23`\n\nYou will be able to choose between:\n1️⃣ *Weekly Report* (7-day snapshot & tests)\n2️⃣ *Full Academic Overview* (All-time stats & insights)"
+    "default_reply": "👋 *Welcome to the Student Report Bot!*\n\nPlease send your details in this format:\n  `Name: Rahul, Class: 10A, Roll: 23`"
 }

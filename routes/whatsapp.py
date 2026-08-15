@@ -30,11 +30,8 @@ USER_SESSIONS = {}
 
 USAGE_MESSAGE = (
     "👋 *Welcome to the Student Report Bot!*\n\n"
-    "Please send student details in this format:\n"
-    "  `Name: Rahul, Class: 10A, Roll: 23`\n\n"
-    "You will be able to choose between:\n"
-    "1️⃣ *Weekly Report* (7-day snapshot & tests)\n"
-    "2️⃣ *Full Academic Overview* (All-time stats & insights)"
+    "Please send your details in this format:\n"
+    "  `Name: Rahul, Class: 10A, Roll: 23`"
 )
 
 GREETINGS = {"hi", "hello", "hey", "start", "help", "hii", "helo", "menu"}
@@ -89,7 +86,7 @@ async def whatsapp_webhook(
         if explicit_type:
             return await _send_report_for_session(From, session, explicit_type, twiml)
 
-        # Always ask user to choose option 1 or 2
+        # Always ask user to choose option 1 or 2 after student details are sent
         menu_text = (
             f"👤 *Student Identified:* {student_name}\n"
             f"Class: {class_name} | Roll No: {roll_no}\n\n"

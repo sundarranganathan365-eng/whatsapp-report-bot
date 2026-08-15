@@ -7,11 +7,8 @@ class ConfigService:
         "is_active": True,
         "default_reply": (
             "👋 *Welcome to the Student Report Bot!*\n\n"
-            "Please send student details in this format:\n"
-            "  `Name: Rahul, Class: 10A, Roll: 23`\n\n"
-            "You will be able to choose between:\n"
-            "1️⃣ *Weekly Report* (7-day snapshot & tests)\n"
-            "2️⃣ *Full Academic Overview* (All-time stats & insights)"
+            "Please send your details in this format:\n"
+            "  `Name: Rahul, Class: 10A, Roll: 23`"
         )
     }
 
