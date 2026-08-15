@@ -9,7 +9,7 @@ from services.db_service import db_service
 
 load_dotenv()
 
-TEST_CLASSES = ["10A", "10B", "9A", "9B", "8A"]
+TEST_CLASSES = ["8", "9", "10"]
 SUBJECTS = ["Maths", "Science", "English", "History", "Physics"]
 FIRST_NAMES = ["Rahul", "Priya", "Amit", "Anjali", "Suresh", "Meera", "Vikram", "Sita", "Arjun", "Kavita"]
 LAST_NAMES = ["Sharma", "Verma", "Gupta", "Singh", "Patel", "Reddy", "Iyer", "Nair", "Das", "Joshi"]
@@ -48,24 +48,24 @@ def seed_data():
     print("--- Generating 6 Months of Records ---")
     for s in students:
         # Attendance: Daily for 180 days
-        for day in range(180):
-            date_str = (start_date + timedelta(days=day)).strftime("%Y-%m-%d")
-            status = "P" if random.random() < 0.85 else "A"
-            attendance_args.append((s["roll"], s["class"], date_str, status))
+        for day_offset in range(180):
+            d = (start_date + timedelta(days=day_offset)).strftime("%Y-%m-%d")
+            status = "Present" if random.random() > 0.15 else "Absent"
+            attendance_args.append((s["roll"], s["class"], d, status))
 
-        # Tests: Every month (6 tests total per student)
-        for t in range(6):
-            date_str = (start_date + timedelta(days=t*30 + 15)).strftime("%Y-%m-%d")
+        # Tests: ~6 periodic tests per student
+        for t_idx in range(6):
+            t_date = (start_date + timedelta(days=t_idx * 28 + random.randint(1, 5))).strftime("%Y-%m-%d")
             subj = random.choice(SUBJECTS)
-            marks = random.randint(40, 100)
-            test_args.append((s["roll"], s["class"], date_str, subj, marks))
+            marks = round(random.uniform(40, 100), 1)
+            test_args.append((s["roll"], s["class"], t_date, subj, marks))
 
-        # Exams: 2 Exams (Mid-term and Final)
-        for e in range(2):
-            date_str = (start_date + timedelta(days=e*90 + 80)).strftime("%Y-%m-%d")
+        # Exams: ~2 exams per student
+        for e_idx in range(2):
+            e_date = (start_date + timedelta(days=e_idx * 75 + 30)).strftime("%Y-%m-%d")
             subj = random.choice(SUBJECTS)
-            marks = random.randint(35, 98)
-            exam_args.append((s["roll"], s["class"], date_str, subj, marks))
+            marks = round(random.uniform(35, 100), 1)
+            exam_args.append((s["roll"], s["class"], e_date, subj, marks))
 
     print("--- Writing Data to MySQL ---")
     db_service.execute_many("INSERT INTO attendance (roll_no, class_name, date, status) VALUES (%s, %s, %s, %s)", attendance_args)
