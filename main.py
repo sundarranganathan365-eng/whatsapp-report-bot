@@ -29,9 +29,19 @@ os.makedirs(".tmp/charts", exist_ok=True)
 
 app = FastAPI(
     title="Student Report Bot API",
-    description="WhatsApp bot backend — generates student PDF reports from Google Sheets",
+    description="WhatsApp bot backend — generates student PDF reports from MySQL Database",
     version="1.0.0",
 )
+
+@app.on_event("startup")
+def startup_event():
+    try:
+        from services.db_service import db_service
+        db_service.init_db()
+        logger.info("Database initialized successfully on startup.")
+    except Exception as e:
+        logger.warning(f"Database initialization deferred or failed on startup: {e}")
+
 
 # Enable CORS for the React frontend
 app.add_middleware(

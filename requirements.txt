@@ -1,7 +1,12 @@
 # WhatsApp Bot — Python Dependencies
 # Install with:  pip install -r requirements.txt
 
-# Google Sheets
+# Database (MySQL)
+pymysql==1.1.1
+sqlalchemy==2.0.30
+cryptography==42.0.7
+
+# Google Sheets (Optional legacy)
 gspread==6.1.2
 google-auth==2.29.0
 
@@ -24,3 +29,4 @@ twilio==9.1.0
 
 # Deployment
 gunicorn==22.0.0
+

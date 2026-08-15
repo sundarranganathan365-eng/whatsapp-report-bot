@@ -1,11 +1,7 @@
 """
 fetch_student_data.py
 ---------------------
-Connects to Google Sheets and fetches all rows related to a given roll number.
-
-Required env vars:
-  GOOGLE_SHEETS_KEY         — The Spreadsheet ID from the Google Sheet URL
-  GOOGLE_CREDENTIALS_PATH   — Path to the service account credentials.json
+Connects to MySQL database and fetches all records related to a given roll number and class.
 """
 
 import sys
@@ -13,14 +9,14 @@ import os
 
 # Ensure the parent directory is in the system path to allow importing from 'services'
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from services.sheets_service import sheets_service
+from services.db_service import db_service
 from dotenv import load_dotenv
 
 load_dotenv()
 
 def fetch_student_data(roll_no: str, class_name: str, student_name: str = None) -> dict:
     """
-    Fetch all data for a student identified by roll_no and class_name.
+    Fetch all data for a student identified by roll_no and class_name from MySQL.
 
     Returns a dict:
     {
@@ -32,70 +28,54 @@ def fetch_student_data(roll_no: str, class_name: str, student_name: str = None) 
     """
     roll_no = str(roll_no).strip()
     class_name = str(class_name).strip().upper()
+
+    # 1. Fetch Student Metadata
     if student_name:
-        student_name = str(student_name).strip().lower()
+        query_student = "SELECT roll_no, class_name, name FROM students WHERE roll_no = %s AND UPPER(class_name) = %s AND LOWER(name) LIKE %s"
+        student_row = db_service.execute_query(query_student, (roll_no, class_name, f"%{student_name.strip().lower()}%"), fetchone=True)
+    else:
+        query_student = "SELECT roll_no, class_name, name FROM students WHERE roll_no = %s AND UPPER(class_name) = %s"
+        student_row = db_service.execute_query(query_student, (roll_no, class_name), fetchone=True)
 
-    # ── students sheet ──────────────────────────────────────────────────────
-    students_data = sheets_service.get_all_records("students")
-
-    student_row = None
-    for row in students_data:
-        row_roll = str(row.get("Roll No", "")).strip()
-        row_class = str(row.get("Class", "")).strip().upper()
-        row_name = str(row.get("Name", "")).strip().lower()
-
-        if row_roll == roll_no and row_class == class_name:
-            if student_name and student_name not in row_name and row_name not in student_name:
-                continue # name mismatch
-            student_row = row
-            break
-
-    if student_row is None:
-        raise ValueError(
-            f"Student not found for Roll No '{roll_no}' in Class '{class_name}'."
-        )
+    if not student_row:
+        raise ValueError(f"Student not found for Roll No '{roll_no}' in Class '{class_name}'.")
 
     student = {
-        "roll_no": roll_no,
-        "name": student_row.get("Name", "Unknown"),
-        "class": student_row.get("Class", "Unknown"),
+        "roll_no": str(student_row["roll_no"]).strip(),
+        "name": str(student_row["name"]).strip(),
+        "class": str(student_row["class_name"]).strip().upper(),
     }
 
-    def match_row(row):
-        if str(row.get("Roll No", "")).strip() != roll_no:
-            return False
-        # If the sheet has a Class column, enforce that it matches too
-        if "Class" in row and str(row.get("Class", "")).strip().upper() != class_name:
-            return False
-        return True
-
-    # ── attendance sheet ────────────────────────────────────────────────────
-    attendance_data = sheets_service.get_all_records("attendance")
+    # 2. Fetch Attendance Records
+    query_attendance = "SELECT date, status FROM attendance WHERE roll_no = %s AND UPPER(class_name) = %s ORDER BY date ASC"
+    att_rows = db_service.execute_query(query_attendance, (roll_no, class_name))
     attendance = [
-        {"date": str(row["Date"]), "status": str(row["Status"]).strip()}
-        for row in attendance_data if match_row(row)
+        {"date": str(r["date"]), "status": str(r["status"]).strip()}
+        for r in att_rows
     ]
 
-    # ── tests sheet ─────────────────────────────────────────────────────────
-    tests_data = sheets_service.get_all_records("tests")
+    # 3. Fetch Test Marks
+    query_tests = "SELECT date, subject, marks FROM tests WHERE roll_no = %s AND UPPER(class_name) = %s ORDER BY date ASC"
+    test_rows = db_service.execute_query(query_tests, (roll_no, class_name))
     tests = [
         {
-            "date": str(row["Date"]),
-            "subject": str(row["Subject"]),
-            "marks": float(row["Marks"] if row["Marks"] != "" else 0),
+            "date": str(r["date"]),
+            "subject": str(r["subject"]).strip(),
+            "marks": float(r["marks"]),
         }
-        for row in tests_data if match_row(row)
+        for r in test_rows
     ]
 
-    # ── exams sheet ─────────────────────────────────────────────────────────
-    exams_data = sheets_service.get_all_records("exams")
+    # 4. Fetch Exam Marks
+    query_exams = "SELECT date, subject, marks FROM exams WHERE roll_no = %s AND UPPER(class_name) = %s ORDER BY date ASC"
+    exam_rows = db_service.execute_query(query_exams, (roll_no, class_name))
     exams = [
         {
-            "date": str(row["Date"]),
-            "subject": str(row["Subject"]),
-            "marks": float(row["Marks"] if row["Marks"] != "" else 0),
+            "date": str(r["date"]),
+            "subject": str(r["subject"]).strip(),
+            "marks": float(r["marks"]),
         }
-        for row in exams_data if match_row(row)
+        for r in exam_rows
     ]
 
     return {
