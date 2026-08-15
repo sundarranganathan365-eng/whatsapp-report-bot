@@ -1,7 +1,7 @@
 """
 routes/whatsapp.py
 ------------------
-Phase 4 — Twilio WhatsApp webhook handler with interactive report options.
+Twilio WhatsApp webhook handler with interactive report options.
 Uses MySQL persistent session store & direct TwiML delivery.
 """
 
@@ -30,13 +30,29 @@ PUBLIC_BASE_URL     = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000")
 # In-memory session store fallback
 IN_MEMORY_SESSIONS = {}
 
-USAGE_MESSAGE = (
-    "👋 *Welcome to the Student Report Bot!*\n\n"
-    "Please send your details in this format:\n"
-    "  `Name: Rahul, Class: 10A, Roll: 23`"
+WELCOME_MESSAGE = (
+    "👋 *Welcome to the Student Academic Report Bot!*\n\n"
+    "To request a student report, please send your details in this format:\n\n"
+    "👉 `Name: Rahul, Class: 10, Roll: 23`\n"
+    "_(or simply `Class: 10, Roll: 23`)_\n\n"
+    "After sending details, you can choose between a *Weekly Report* or *Full Academic Overview*! 📊"
 )
 
-GREETINGS = {"hi", "hello", "hey", "start", "help", "hii", "helo", "menu"}
+GREETING_WORDS = {
+    "hi", "hello", "hey", "heyy", "heyyy", "hiii", "helloo", 
+    "start", "help", "hii", "helo", "menu", "bot", "welcome",
+    "good morning", "good evening", "good afternoon"
+}
+
+def is_greeting_message(text: str) -> bool:
+    clean = text.lower().strip()
+    clean_alpha = re.sub(r'[^a-z\s]', '', clean).strip()
+    if clean_alpha in GREETING_WORDS or clean in GREETING_WORDS:
+        return True
+    # If short text without numbers or colons or 'roll'
+    if len(clean) < 12 and not re.search(r'\d', clean) and ":" not in clean and "roll" not in clean:
+        return True
+    return False
 
 
 def _clean_class(cls_str: str) -> str:
@@ -73,8 +89,9 @@ async def whatsapp_webhook(
         return Response(content=str(twiml), media_type="application/xml")
 
     # ── Greeting ─────────────────────────────────────────────────────────────
-    if incoming.lower() in GREETINGS or not incoming:
-        twiml.message(config.get("default_reply", USAGE_MESSAGE))
+    if not incoming or is_greeting_message(incoming):
+        reply = config.get("default_reply", WELCOME_MESSAGE)
+        twiml.message(reply)
         return Response(content=str(twiml), media_type="application/xml")
 
     # ── Option Selection (reply '1' or '2') for active session ───────────────
@@ -110,10 +127,12 @@ async def whatsapp_webhook(
 
         display_class = _clean_class(class_name)
 
-        # Always ask user to choose option 1 or 2 after student details are sent
+        # Prompt options after student details received
         menu_text = (
-            f"👤 *Student Identified:* {student_name}\n"
-            f"Class: {display_class} | Roll No: {roll_no}\n\n"
+            f"👤 *Student Details Received:*\n"
+            f"• Name: {student_name}\n"
+            f"• Class: {display_class}\n"
+            f"• Roll No: {roll_no}\n\n"
             f"Which report would you like to receive?\n\n"
             f"1️⃣ *Weekly Report* (7-day summary & tests)\n"
             f"2️⃣ *Full Academic Overview* (All-time stats & insights)\n\n"
@@ -125,9 +144,9 @@ async def whatsapp_webhook(
     # Incomplete details & no active session
     missing_str = ", ".join(parsed["missing"])
     twiml.message(
-        f"❌ I'm missing some details: *{missing_str}*.\n\n"
+        f"❌ Missing required details: *{missing_str}*.\n\n"
         "Please send your details in this format:\n"
-        "  `Name: Rahul, Class: 10A, Roll: 23`"
+        "👉 `Name: Rahul, Class: 10, Roll: 23`"
     )
     return Response(content=str(twiml), media_type="application/xml")
 
@@ -135,7 +154,7 @@ async def whatsapp_webhook(
 def _send_report_for_session(sender: str, session: dict, report_type: str, twiml: MessagingResponse):
     roll_no = session["roll_no"]
     class_name = session["class_name"]
-    student_name = session["name"]
+    student_name = session.get("name", "Student")
 
     try:
         result = build_report(roll_no, class_name, student_name, report_type=report_type)
@@ -159,7 +178,7 @@ def _send_report_for_session(sender: str, session: dict, report_type: str, twiml
     msg2.body("📎 Detailed PDF report attached above.")
     msg2.media(pdf_url)
 
-    # Optional: also try Twilio REST API push if keys configured
+    # Optional: push via REST API if keys available
     if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_ACCOUNT_SID.startswith("AC"):
         try:
             client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
@@ -175,6 +194,6 @@ def _send_report_for_session(sender: str, session: dict, report_type: str, twiml
                 body="📎 Detailed PDF report attached above."
             )
         except Exception as e:
-            print(f"REST API secondary push notice (handled by TwiML): {e}")
+            print(f"REST API push notice (handled by TwiML): {e}")
 
     return Response(content=str(twiml), media_type="application/xml")
