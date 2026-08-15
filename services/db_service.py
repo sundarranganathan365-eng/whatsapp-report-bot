@@ -17,7 +17,6 @@ class DatabaseService:
         mysql_url = os.getenv("MYSQL_URL") or os.getenv("DATABASE_URL")
         
         if mysql_url:
-            # Parse connection URL if provided by Cloud provider (e.g., mysql://user:pass@host:port/dbname)
             if mysql_url.startswith("mysql+pymysql://"):
                 mysql_url = mysql_url.replace("mysql+pymysql://", "mysql://")
             
@@ -28,7 +27,6 @@ class DatabaseService:
             self.password = parsed.password or ""
             self.database = parsed.path.lstrip("/") or "student_report_db"
             
-            # Check for SSL options in URL query params or ENV
             query_params = parse_qs(parsed.query)
             ssl_mode = os.getenv("MYSQL_SSL_MODE") or query_params.get("ssl_mode", [None])[0] or query_params.get("ssl", [None])[0]
             self.ssl_config = {"ssl": True} if ssl_mode and str(ssl_mode).lower() not in ["disabled", "false", "0"] else None
@@ -43,9 +41,6 @@ class DatabaseService:
             self.ssl_config = {"ssl": True} if ssl_mode and str(ssl_mode).lower() not in ["disabled", "false", "0"] else None
 
     def get_connection(self, create_db_if_missing: bool = False):
-        """
-        Creates and returns a PyMySQL database connection.
-        """
         self.reload_config()
         kwargs = {
             "host": self.host,
@@ -66,23 +61,17 @@ class DatabaseService:
         return pymysql.connect(**kwargs)
 
     def init_db(self):
-        """
-        Ensures the database and required tables exist on Cloud/Local MySQL.
-        """
         try:
-            # 1. Attempt to create database if permitted (ignore if already exists or permission denied on managed DBs)
             try:
                 conn = self.get_connection(create_db_if_missing=True)
                 with conn.cursor() as cursor:
                     cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{self.database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
                 conn.close()
             except Exception as e:
-                logger.info(f"Note on DB creation (normal for managed Cloud DBs): {e}")
+                logger.info(f"Note on DB creation: {e}")
 
-            # 2. Ensure Tables Exist
             conn = self.get_connection()
             with conn.cursor() as cursor:
-                # Students table
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS students (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -94,7 +83,6 @@ class DatabaseService:
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                 """)
 
-                # Attendance table
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS attendance (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -108,7 +96,6 @@ class DatabaseService:
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                 """)
 
-                # Tests table
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS tests (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -122,7 +109,6 @@ class DatabaseService:
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                 """)
 
-                # Exams table
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS exams (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -136,6 +122,16 @@ class DatabaseService:
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                 """)
 
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS whatsapp_sessions (
+                    sender_phone VARCHAR(100) PRIMARY KEY,
+                    roll_no VARCHAR(50) NOT NULL,
+                    class_name VARCHAR(50) NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                """)
+
             conn.close()
             logger.info("✅ MySQL database and tables initialized successfully.")
         except Exception as e:
@@ -143,9 +139,6 @@ class DatabaseService:
             raise
 
     def execute_query(self, query: str, args=None, fetchall: bool = True, fetchone: bool = False):
-        """
-        Executes a SQL query and returns dictionary records or rowcount.
-        """
         conn = self.get_connection()
         try:
             with conn.cursor() as cursor:
@@ -159,9 +152,6 @@ class DatabaseService:
             conn.close()
 
     def execute_many(self, query: str, args_list: list):
-        """
-        Executes batch insert/update queries.
-        """
         if not args_list:
             return 0
         conn = self.get_connection()
@@ -171,5 +161,24 @@ class DatabaseService:
                 return count
         finally:
             conn.close()
+
+    def save_session(self, sender_phone: str, roll_no: str, class_name: str, name: str):
+        q = """
+        INSERT INTO whatsapp_sessions (sender_phone, roll_no, class_name, name)
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE roll_no = VALUES(roll_no), class_name = VALUES(class_name), name = VALUES(name);
+        """
+        try:
+            self.execute_query(q, (sender_phone, roll_no, class_name, name), fetchall=False)
+        except Exception as e:
+            logger.error(f"Failed to save session: {e}")
+
+    def get_session(self, sender_phone: str) -> dict | None:
+        q = "SELECT roll_no, class_name, name FROM whatsapp_sessions WHERE sender_phone = %s"
+        try:
+            return self.execute_query(q, (sender_phone,), fetchone=True)
+        except Exception as e:
+            logger.error(f"Failed to get session: {e}")
+            return None
 
 db_service = DatabaseService()
