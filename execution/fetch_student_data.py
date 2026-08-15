@@ -2,11 +2,12 @@
 fetch_student_data.py
 ---------------------
 Connects to MySQL database and fetches all records related to a given roll number and class.
-Supports flexible lookup (e.g. Class '8' matches '8A', name fallback).
+Supports flexible lookup and formats class display as numeric grade only (e.g. '10A' -> '10').
 """
 
 import sys
 import os
+import re
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from services.db_service import db_service
@@ -23,21 +24,17 @@ def fetch_student_data(roll_no: str, class_name: str, student_name: str = None) 
 
     student_row = None
 
-    # Helper function to query student
     def find_student(r_no, c_name, s_name):
-        # Exact roll + exact class
         q1 = "SELECT roll_no, class_name, name FROM students WHERE roll_no = %s AND UPPER(class_name) = %s"
         res = db_service.execute_query(q1, (r_no, c_name), fetchone=True)
         if res:
             return res
 
-        # Exact roll + prefix class (e.g. '8' -> '8A')
         q2 = "SELECT roll_no, class_name, name FROM students WHERE roll_no = %s AND UPPER(class_name) LIKE %s"
         res = db_service.execute_query(q2, (r_no, f"{c_name}%"), fetchone=True)
         if res:
             return res
 
-        # Name match in class
         if s_name:
             q3 = "SELECT roll_no, class_name, name FROM students WHERE LOWER(name) LIKE %s AND (UPPER(class_name) = %s OR UPPER(class_name) LIKE %s)"
             res = db_service.execute_query(q3, (f"%{s_name.strip().lower()}%", c_name, f"{c_name}%"), fetchone=True)
@@ -49,7 +46,6 @@ def fetch_student_data(roll_no: str, class_name: str, student_name: str = None) 
     student_row = find_student(roll_no, cls_input, student_name)
 
     if not student_row:
-        # Fallback: find any student matching name across all classes
         if student_name:
             q_name = "SELECT roll_no, class_name, name FROM students WHERE LOWER(name) LIKE %s"
             student_row = db_service.execute_query(q_name, (f"%{student_name.strip().lower()}%",), fetchone=True)
@@ -60,10 +56,15 @@ def fetch_student_data(roll_no: str, class_name: str, student_name: str = None) 
     real_roll = str(student_row["roll_no"]).strip()
     real_class = str(student_row["class_name"]).strip().upper()
 
+    # Format class display to numeric grade only e.g. '10A' -> '10'
+    m_cls = re.search(r'\d+', real_class)
+    display_class = m_cls.group(0) if m_cls else real_class
+
     student = {
         "roll_no": real_roll,
         "name": str(student_row["name"]).strip(),
-        "class": real_class,
+        "class": display_class,
+        "raw_class": real_class,
     }
 
     # Fetch Attendance Records

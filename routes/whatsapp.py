@@ -5,7 +5,7 @@ Phase 4 — Twilio WhatsApp webhook handler with interactive report options.
 Uses MySQL persistent session store & direct TwiML delivery.
 """
 
-import sys, os
+import sys, os, re
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from fastapi import APIRouter, Form, Request, Response
@@ -37,6 +37,13 @@ USAGE_MESSAGE = (
 )
 
 GREETINGS = {"hi", "hello", "hey", "start", "help", "hii", "helo", "menu"}
+
+
+def _clean_class(cls_str: str) -> str:
+    if not cls_str:
+        return ""
+    m = re.search(r'\d+', str(cls_str))
+    return m.group(0) if m else str(cls_str).strip()
 
 
 def _get_user_session(sender_phone: str) -> dict | None:
@@ -101,10 +108,12 @@ async def whatsapp_webhook(
         if explicit_type:
             return _send_report_for_session(From, session, explicit_type, twiml)
 
+        display_class = _clean_class(class_name)
+
         # Always ask user to choose option 1 or 2 after student details are sent
         menu_text = (
             f"👤 *Student Identified:* {student_name}\n"
-            f"Class: {class_name} | Roll No: {roll_no}\n\n"
+            f"Class: {display_class} | Roll No: {roll_no}\n\n"
             f"Which report would you like to receive?\n\n"
             f"1️⃣ *Weekly Report* (7-day summary & tests)\n"
             f"2️⃣ *Full Academic Overview* (All-time stats & insights)\n\n"

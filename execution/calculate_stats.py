@@ -5,6 +5,7 @@ Pure calculation layer — takes raw student data (from fetch_student_data.py)
 and returns computed statistics and formatted WhatsApp report templates.
 """
 
+import re
 from datetime import datetime, timedelta
 
 def get_badge(val: float) -> str:
@@ -14,6 +15,12 @@ def get_badge(val: float) -> str:
         return "🟡"
     else:
         return "🔴"
+
+def _clean_class(cls_str: str) -> str:
+    if not cls_str:
+        return ""
+    m = re.search(r'\d+', str(cls_str))
+    return m.group(0) if m else str(cls_str).strip()
 
 def calculate_attendance(attendance: list) -> dict:
     if not attendance:
@@ -115,6 +122,7 @@ def calculate_exam_stats(exams: list) -> dict:
 def build_weekly_report_text(stats: dict, raw_data: dict, days: int = 7) -> str:
     """Format Option 1: Weekly Report Snapshot"""
     student = stats["student"]
+    cls_display = _clean_class(student["class"])
     
     # 1. Date Range
     sorted_att = sorted(raw_data["attendance"], key=lambda r: r["date"], reverse=True)
@@ -145,7 +153,6 @@ def build_weekly_report_text(stats: dict, raw_data: dict, days: int = 7) -> str:
 
     test_lines = []
     if recent_tests:
-        # Group latest by subject
         seen_subj = set()
         for t in recent_tests:
             subj = t["subject"]
@@ -160,7 +167,7 @@ def build_weekly_report_text(stats: dict, raw_data: dict, days: int = 7) -> str:
     by_subj = stats["tests"]["by_subject"] or stats["exams"]["by_subject"]
     insights = []
     if att_pct >= 80:
-        insights.append("Overall performance and attendance are stable.")
+        insights.append("Overall performance is stable.")
     elif att_pct >= 60:
         insights.append("Attendance is satisfactory, but consistent focus is needed.")
     else:
@@ -177,7 +184,7 @@ def build_weekly_report_text(stats: dict, raw_data: dict, days: int = 7) -> str:
 
     weekly_text = (
         f"👤 *{student['name']}*\n"
-        f"Class: {student['class']} | Roll No: {student['roll_no']}\n"
+        f"Class: {cls_display} | Roll No: {student['roll_no']}\n"
         f"Week: {week_str}\n\n"
         f"📅 *ATTENDANCE*\n"
         f"Present: {p_count}/{att_total}\n"
@@ -195,6 +202,7 @@ def build_weekly_report_text(stats: dict, raw_data: dict, days: int = 7) -> str:
 def build_full_overview_text(stats: dict, raw_data: dict) -> str:
     """Format Option 2: Student All Details (Academic Overview)"""
     student = stats["student"]
+    cls_display = _clean_class(student["class"])
     att_pct = stats["attendance"]["percentage"]
     
     # Combined Subject Averages (Tests + Exams)
@@ -231,7 +239,6 @@ def build_full_overview_text(stats: dict, raw_data: dict) -> str:
         status_str = "🔴 Needs Improvement"
         trend_str = "Needs Attention ↘️"
 
-    # Insight paragraph
     first_name = student["name"].split()[0]
     if overall_avg >= 75:
         insight_p = (
@@ -249,7 +256,7 @@ def build_full_overview_text(stats: dict, raw_data: dict) -> str:
 
     full_text = (
         f"Name: *{student['name']}*\n"
-        f"Class: {student['class']}\n"
+        f"Class: {cls_display}\n"
         f"Roll No: {student['roll_no']}\n\n"
         f"📊 *ACADEMIC OVERVIEW*\n"
         f"Overall Average: {overall_avg}%\n"
