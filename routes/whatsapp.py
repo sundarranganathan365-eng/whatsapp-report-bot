@@ -111,10 +111,13 @@ async def whatsapp_webhook(
         if PUBLIC_BASE_URL and "ngrok" not in PUBLIC_BASE_URL and "localhost" not in PUBLIC_BASE_URL:
             base_url = PUBLIC_BASE_URL.rstrip('/')
         else:
-            # Handle reverse proxies (e.g. Render https)
-            scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
-            netloc = request.headers.get("x-forwarded-host", request.url.netloc)
-            base_url = f"{scheme}://{netloc}".rstrip('/')
+            try:
+                headers = dict(request.headers) if hasattr(request, "headers") and request.headers else {}
+                scheme = headers.get("x-forwarded-proto", getattr(request.url, "scheme", "http"))
+                netloc = headers.get("x-forwarded-host", getattr(request.url, "netloc", "localhost:8000"))
+                base_url = f"{scheme}://{netloc}".rstrip('/')
+            except Exception:
+                base_url = "http://localhost:8000"
 
         # ── Option Selection (reply '1' or '2') for active session ───────────────
         if clean_in in ["1", "2", "weekly", "full", "overview", "all"] and session:
