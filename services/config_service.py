@@ -5,7 +5,14 @@ CONFIG_FILE = os.path.join(os.path.dirname(__file__), "..", "bot_config.json")
 class ConfigService:
     DEFAULT_CONFIG = {
         "is_active": True,
-        "default_reply": "👋 *Welcome to the Student Report Bot!*\n\nSend your details in this format:\n  `Name: Rahul, Class: 10A, Roll: 23`\n\nOr just send your roll number:\n  `Roll: 23`\n\nI'll send back your full academic report as a PDF 📄"
+        "default_reply": (
+            "👋 *Welcome to the Student Report Bot!*\n\n"
+            "Please send student details in this format:\n"
+            "  `Name: Rahul, Class: 10A, Roll: 23`\n\n"
+            "You will be able to choose between:\n"
+            "1️⃣ *Weekly Report* (7-day snapshot & tests)\n"
+            "2️⃣ *Full Academic Overview* (All-time stats & insights)"
+        )
     }
 
     def _load_config(self):
