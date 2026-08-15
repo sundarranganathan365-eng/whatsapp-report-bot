@@ -27,7 +27,7 @@ router = APIRouter()
 TWILIO_ACCOUNT_SID  = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN   = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_FROM         = os.getenv("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
-PUBLIC_BASE_URL     = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000")
+PUBLIC_BASE_URL     = os.getenv("PUBLIC_BASE_URL", "")
 
 # In-memory session store fallback
 IN_MEMORY_SESSIONS = {}
@@ -107,10 +107,16 @@ async def whatsapp_webhook(
         clean_in = incoming.lower().strip()
         session = _get_user_session(From)
 
+        # Dynamic base URL resolution for PDFs
+        if PUBLIC_BASE_URL and not PUBLIC_BASE_URL.startswith("http://localhost"):
+            base_url = PUBLIC_BASE_URL.rstrip('/')
+        else:
+            base_url = f"{request.url.scheme}://{request.url.netloc}".rstrip('/')
+
         # ── Option Selection (reply '1' or '2') for active session ───────────────
         if clean_in in ["1", "2", "weekly", "full", "overview", "all"] and session:
             report_type = "weekly" if clean_in in ["1", "weekly"] else "full"
-            return _send_report_for_session(From, session, report_type, twiml)
+            return _send_report_for_session(From, session, report_type, twiml, base_url)
 
         # ── Explicit option flag in single message e.g. Option: 1 / Report: 2 ───
         explicit_type = None
@@ -133,7 +139,7 @@ async def whatsapp_webhook(
 
             # If user explicitly passed option in first message
             if explicit_type:
-                return _send_report_for_session(From, session, explicit_type, twiml)
+                return _send_report_for_session(From, session, explicit_type, twiml, base_url)
 
             display_class = _clean_class(class_name)
 
@@ -168,7 +174,7 @@ async def whatsapp_webhook(
         return Response(content=str(err_response), media_type="application/xml")
 
 
-def _send_report_for_session(sender: str, session: dict, report_type: str, twiml: MessagingResponse):
+def _send_report_for_session(sender: str, session: dict, report_type: str, twiml: MessagingResponse, base_url: str):
     roll_no = session["roll_no"]
     class_name = session["class_name"]
     student_name = session.get("name", "Student")
@@ -185,7 +191,7 @@ def _send_report_for_session(sender: str, session: dict, report_type: str, twiml
 
     # Construct direct TwiML response with text report and PDF media attachment
     pdf_filename = os.path.basename(result["pdf_path"])
-    pdf_url = f"{PUBLIC_BASE_URL.rstrip('/')}/api/pdf/{pdf_filename}"
+    pdf_url = f"{base_url.rstrip('/')}/api/pdf/{pdf_filename}"
 
     # First TwiML message: Formatted text report
     msg1 = twiml.message()
