@@ -181,4 +181,11 @@ class DatabaseService:
             logger.error(f"Failed to get session: {e}")
             return None
 
+    def delete_session(self, sender_phone: str):
+        q = "DELETE FROM whatsapp_sessions WHERE sender_phone = %s"
+        try:
+            self.execute_query(q, (sender_phone,), fetchall=False)
+        except Exception as e:
+            logger.error(f"Failed to delete session: {e}")
+
 db_service = DatabaseService()
