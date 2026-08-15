@@ -107,11 +107,14 @@ async def whatsapp_webhook(
         clean_in = incoming.lower().strip()
         session = _get_user_session(From)
 
-        # Dynamic base URL resolution for PDFs
-        if PUBLIC_BASE_URL and not PUBLIC_BASE_URL.startswith("http://localhost"):
+        # Dynamic base URL resolution — filter out dead ngrok or localhost URLs
+        if PUBLIC_BASE_URL and "ngrok" not in PUBLIC_BASE_URL and "localhost" not in PUBLIC_BASE_URL:
             base_url = PUBLIC_BASE_URL.rstrip('/')
         else:
-            base_url = f"{request.url.scheme}://{request.url.netloc}".rstrip('/')
+            # Handle reverse proxies (e.g. Render https)
+            scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+            netloc = request.headers.get("x-forwarded-host", request.url.netloc)
+            base_url = f"{scheme}://{netloc}".rstrip('/')
 
         # ── Option Selection (reply '1' or '2') for active session ───────────────
         if clean_in in ["1", "2", "weekly", "full", "overview", "all"] and session:
@@ -189,7 +192,6 @@ def _send_report_for_session(sender: str, session: dict, report_type: str, twiml
         twiml.message(f"⚠️ Error generating report: {e}")
         return Response(content=str(twiml), media_type="application/xml")
 
-    # Construct direct TwiML response with text report and PDF media attachment
     pdf_filename = os.path.basename(result["pdf_path"])
     pdf_url = f"{base_url.rstrip('/')}/api/pdf/{pdf_filename}"
 
@@ -197,9 +199,10 @@ def _send_report_for_session(sender: str, session: dict, report_type: str, twiml
     msg1 = twiml.message()
     msg1.body(result["report_text"])
 
-    # Second TwiML message: PDF attachment
-    msg2 = twiml.message()
-    msg2.body("📎 Detailed PDF report attached above.")
-    msg2.media(pdf_url)
+    # Second TwiML message: PDF attachment (only when valid HTTPS URL available)
+    if base_url.startswith("https://"):
+        msg2 = twiml.message()
+        msg2.body("📎 Detailed PDF report attached above.")
+        msg2.media(pdf_url)
 
     return Response(content=str(twiml), media_type="application/xml")
