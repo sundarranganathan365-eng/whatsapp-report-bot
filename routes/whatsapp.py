@@ -1,10 +1,7 @@
 """
 routes/whatsapp.py
 ------------------
-Phase 4 — Twilio WhatsApp webhook handler.
-
-Twilio sends a POST to this endpoint every time a user messages the bot.
-We parse the message, call the report service, and reply with text + PDF.
+Phase 4 — Twilio WhatsApp webhook handler with interactive report options.
 """
 
 import sys, os
@@ -26,21 +23,21 @@ router = APIRouter()
 TWILIO_ACCOUNT_SID  = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN   = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_FROM         = os.getenv("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
+PUBLIC_BASE_URL     = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000")
 
-# Public base URL of your server — needed so Twilio can fetch the PDF
-# Set this in .env once you have an ngrok/public URL
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000")
+# In-memory session store: { sender_phone: {"roll_no": ..., "class_name": ..., "name": ...} }
+USER_SESSIONS = {}
 
 USAGE_MESSAGE = (
     "👋 *Welcome to the Student Report Bot!*\n\n"
-    "Send your details in this format:\n"
+    "Please send your details in this format:\n"
     "  `Name: Rahul, Class: 10A, Roll: 23`\n\n"
-    "Or just send your roll number:\n"
-    "  `Roll: 23`\n\n"
-    "I'll send back your full academic report as a PDF 📄"
+    "You will be able to choose between:\n"
+    "1️⃣ *Weekly Report* (7-day snapshot & tests)\n"
+    "2️⃣ *Full Academic Overview* (All-time stats & insights)\n"
 )
 
-GREETINGS = {"hi", "hello", "hey", "start", "help", "hii", "helo"}
+GREETINGS = {"hi", "hello", "hey", "start", "help", "hii", "helo", "menu"}
 
 
 @router.post("/whatsapp", summary="Twilio WhatsApp webhook")
@@ -49,10 +46,6 @@ async def whatsapp_webhook(
     Body: str = Form(default=""),
     From: str = Form(default=""),
 ):
-    """
-    Twilio posts here on every incoming WhatsApp message.
-    Content-Type: application/x-www-form-urlencoded
-    """
     incoming = Body.strip()
     twiml = MessagingResponse()
     
@@ -66,73 +59,90 @@ async def whatsapp_webhook(
         twiml.message(config.get("default_reply", USAGE_MESSAGE))
         return Response(content=str(twiml), media_type="application/xml")
 
-    # ── Parse input ──────────────────────────────────────────────────────────
+    # ── Option Selection (1 or 2) for active session ─────────────────────────
+    clean_in = incoming.lower().strip()
+    if clean_in in ["1", "2", "weekly", "full", "overview", "all"] and From in USER_SESSIONS:
+        session = USER_SESSIONS[From]
+        report_type = "weekly" if clean_in in ["1", "weekly"] else "full"
+        return await _send_report_for_session(From, session, report_type, twiml)
+
+    # ── Parse input for student details ─────────────────────────────────────
     parsed = parse_student_input(incoming)
     
-    if not is_complete(parsed):
-        missing_str = ", ".join(parsed["missing"])
-        twiml.message(
-            f"❌ I'm missing some details: *{missing_str}*.\n\n"
-            "Please send your details in this format:\n"
-            "  `Name: Rahul, Class: 10A, Roll: 23`"
+    if is_complete(parsed):
+        roll_no = parsed["roll_no"]
+        class_name = parsed["class"]
+        student_name = parsed["name"]
+        
+        # Save session
+        session = {"roll_no": roll_no, "class_name": class_name, "name": student_name}
+        USER_SESSIONS[From] = session
+
+        # Check if option specified in text directly
+        if "1" in incoming or "weekly" in clean_in:
+            return await _send_report_for_session(From, session, "weekly", twiml)
+        elif "2" in incoming or "full" in clean_in or "overview" in clean_in:
+            return await _send_report_for_session(From, session, "full", twiml)
+
+        # Send option selection menu
+        menu_text = (
+            f"👤 *Student Identified:* {student_name}\n"
+            f"Class: {class_name} | Roll No: {roll_no}\n\n"
+            f"Which report would you like to receive?\n\n"
+            f"1️⃣ *Weekly Report* (7-day summary & tests)\n"
+            f"2️⃣ *Full Academic Overview* (All-time stats & insights)\n\n"
+            f"👉 Reply *1* for Weekly Report or *2* for Full Academic Overview"
         )
+        twiml.message(menu_text)
         return Response(content=str(twiml), media_type="application/xml")
 
-    roll_no = parsed["roll_no"]
-    class_name = parsed["class"]
-    student_name = parsed["name"]
+    # Incomplete details & no active session
+    missing_str = ", ".join(parsed["missing"])
+    twiml.message(
+        f"❌ I'm missing some details: *{missing_str}*.\n\n"
+        "Please send your details in this format:\n"
+        "  `Name: Rahul, Class: 10A, Roll: 23`"
+    )
+    return Response(content=str(twiml), media_type="application/xml")
 
-    # ── Generate report ───────────────────────────────────────────────────────
+
+async def _send_report_for_session(sender: str, session: dict, report_type: str, twiml: MessagingResponse):
+    roll_no = session["roll_no"]
+    class_name = session["class_name"]
+    student_name = session["name"]
+
     try:
-        result = build_report(roll_no, class_name, student_name)
+        result = build_report(roll_no, class_name, student_name, report_type=report_type)
     except ValueError as e:
-        twiml.message(
-            f"❌ {str(e)}\n"
-            "Please double check the Name, Class, and Roll No."
-        )
-        return Response(content=str(twiml), media_type="application/xml")
-    except EnvironmentError:
-        twiml.message(
-            "⚠️ The bot is not configured properly.\n"
-            "Please contact the administrator."
-        )
+        twiml.message(f"❌ {str(e)}\nPlease double check the Name, Class, and Roll No.")
         return Response(content=str(twiml), media_type="application/xml")
     except Exception as e:
-        twiml.message(
-            f"⚠️ Something went wrong while generating the report.\n"
-            f"Error: {e}\n\nPlease try again in a moment."
-        )
+        twiml.message(f"⚠️ Error generating report: {e}")
         return Response(content=str(twiml), media_type="application/xml")
 
-    # ── Immediate acknowledgment ──────────────────────────────────────────────
-    # We return a quick TwiML response so Twilio doesn't time out while we generate the PDF.
-    # The actual report content will be sent via the REST API below.
     twiml.message("⏳ *Generating your report...* Please wait a moment.")
 
-    # ── Send report via Twilio REST API ───────────────────────────────────────
     try:
         client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
         
-        # 1. Send the text snapshot (Last 7 Days)
+        # 1. Send formatted text (Weekly or Full Overview)
         client.messages.create(
             from_=TWILIO_FROM,
-            to=From,
-            body=result["weekly_snapshot"]
+            to=sender,
+            body=result["report_text"]
         )
 
-        # 2. Add a tiny delay if needed or just send the PDF immediately
+        # 2. Send PDF attachment
         pdf_filename = os.path.basename(result["pdf_path"])
         pdf_url = f"{PUBLIC_BASE_URL}/api/pdf/{pdf_filename}"
         
-        # 3. Send the PDF attachment
         client.messages.create(
             from_=TWILIO_FROM,
-            to=From,
+            to=sender,
             media_url=[pdf_url],
-            body="📎 Your full PDF report is attached above.",
+            body="📎 Detailed PDF report attached above."
         )
     except Exception as e:
-        # If REST API fails, we can't do much but log it
         print(f"ERROR sending WhatsApp report: {e}")
 
     return Response(content=str(twiml), media_type="application/xml")

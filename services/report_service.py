@@ -14,22 +14,22 @@ from execution.generate_charts import generate_all_charts
 from execution.generate_pdf import generate_pdf
 
 
-def build_report(roll_no: str, class_name: str, student_name: str = None) -> dict:
+def build_report(roll_no: str, class_name: str, student_name: str = None, report_type: str = "weekly") -> dict:
     """
     Full pipeline: fetch → calculate → chart → PDF.
+
+    report_type: 'weekly' / '1'  OR  'full' / '2' / 'overview'
 
     Returns:
     {
         "student_name": str,
-        "summary":      str,   # WhatsApp-formatted text
+        "summary":      str,
+        "report_text":   str,   # Selected report text format
+        "weekly_snapshot": str,
+        "full_overview": str,
         "pdf_path":     str,
         "chart_paths":  dict,
     }
-
-    Raises:
-        ValueError        — student not found
-        EnvironmentError  — missing env vars / credentials
-        Exception         — unexpected failures
     """
     roll_no = str(roll_no).strip()
     class_name = str(class_name).strip()
@@ -37,7 +37,6 @@ def build_report(roll_no: str, class_name: str, student_name: str = None) -> dic
     # 1. Fetch
     raw_data = fetch_student_data(roll_no, class_name, student_name)
     
-
     # 2. Calculate
     stats = build_full_stats(raw_data)
 
@@ -47,49 +46,19 @@ def build_report(roll_no: str, class_name: str, student_name: str = None) -> dic
     # 4. PDF
     pdf_path = generate_pdf(stats, chart_paths)
 
-    # 5. Build WhatsApp text summary
-    summary = _build_summary(stats)
+    # Select report text based on type
+    rtype = str(report_type).lower().strip()
+    if rtype in ["full", "2", "overview", "all"]:
+        selected_text = stats["full_overview_text"]
+    else:
+        selected_text = stats["weekly_report_text"]
 
     return {
         "student_name": stats["student"]["name"],
-        "summary": summary,
-        "weekly_snapshot": stats["weekly_snapshot"],
+        "summary": selected_text,
+        "report_text": selected_text,
+        "weekly_snapshot": stats["weekly_report_text"],
+        "full_overview": stats["full_overview_text"],
         "pdf_path": pdf_path,
         "chart_paths": chart_paths,
     }
-
-
-def _build_summary(stats: dict) -> str:
-    """Build a WhatsApp-friendly plain-text summary."""
-    student = stats["student"]
-    att     = stats["attendance"]
-    tests   = stats["tests"]
-    exams   = stats["exams"]
-
-    lines = [
-        f"📋 *Report: {student['name']}*",
-        f"Class: {student['class']} | Roll No: {student['roll_no']}",
-        "",
-        f"📅 *Attendance*",
-        f"   {att['percentage']}% ({att['present']}/{att['total']} days)",
-    ]
-
-    if att["percentage"] < 75:
-        lines.append("   ⚠️ Below 75% threshold!")
-
-    if tests["by_subject"]:
-        lines.append(f"\n📝 *Tests* (Avg: {tests['average']})")
-        for subj, avg in tests["by_subject"].items():
-            lines.append(f"   • {subj}: {avg}")
-    else:
-        lines.append("\n📝 *Tests*: No records found")
-
-    if exams["by_subject"]:
-        lines.append(f"\n🎓 *Exams* (Avg: {exams['average']})")
-        for subj, avg in exams["by_subject"].items():
-            lines.append(f"   • {subj}: {avg}")
-    else:
-        lines.append("\n🎓 *Exams*: No records found")
-
-    lines.append("\n📄 PDF report attached.")
-    return "\n".join(lines)
